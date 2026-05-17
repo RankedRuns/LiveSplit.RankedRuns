@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- Import parent Directory.Build.props only if it exists -->
+  <Import
+    Project="$([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)..))"
+    Condition="$([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)..)) != ''" />
+
+  <!-- Import local props -->
+  <Import Project="$(MSBuildThisFileDirectory)props\*.props" />
+
+</Project>

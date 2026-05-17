@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LiveSplit.RankedRuns/LiveSplit.RankedRuns.csproj" />
+  </Folder>
+</Solution>
