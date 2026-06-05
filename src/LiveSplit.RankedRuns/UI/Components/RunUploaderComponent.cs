@@ -90,14 +90,11 @@ public class RunUploaderComponent : LogicComponent
         State = state;
         Settings = new RunUploaderSettings();
 
-        Settings.AuthButtonClicked += async (_, __) =>
-        {
-            await HandleAuthButtonClicked();
-        };
+        Settings.AuthButtonClicked += async (_, __) => await HandleAuthButtonClicked();
 
         _httpClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(8)
+            Timeout = TimeSpan.FromSeconds(15)
         };
 
         _httpClient.DefaultRequestHeaders.Add("Accept", "*/*");
@@ -169,11 +166,18 @@ public class RunUploaderComponent : LogicComponent
     {
         try
         {
+            string folder = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "RankedRuns",
+                "LiveSplit");
+
+            System.IO.Directory.CreateDirectory(folder);
+
+            string file = System.IO.Path.Combine(folder, "plugin.log");
+
             System.IO.File.AppendAllText(
-                System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "RankedRunsLiveSplit.log"),
-                DateTime.UtcNow + " " + prefix + " " + ex + Environment.NewLine);
+                file,
+                DateTime.UtcNow.ToString("O") + " [" + prefix + "] " + ex + Environment.NewLine);
         }
         catch
         {

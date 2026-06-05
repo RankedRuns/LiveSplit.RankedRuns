@@ -19,6 +19,15 @@ public sealed class LiveSplitAuthClient
 
     private string _accessToken;
 
+    public enum RefreshResult
+    {
+        Success,
+        InvalidToken,
+        ServiceUnavailable
+    }
+
+    public RefreshResult LastRefreshResult { get; private set; }
+
     public LiveSplitAuthClient(
         HttpClient http,
         Func<string> getRefreshToken,
@@ -170,11 +179,17 @@ public sealed class LiveSplitAuthClient
 
         resp.Dispose();
 
-        bool refreshed = await TryRefreshAsync(refreshUrl, ct);
-        if (!refreshed)
+        RefreshResult refreshed = await TryRefreshAsync(refreshUrl, ct);
+
+        if (refreshed == RefreshResult.InvalidToken)
         {
             ClearAllTokens();
             return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        }
+
+        if (refreshed == RefreshResult.ServiceUnavailable)
+        {
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
         }
 
         return await SendWithAccessAsync(buildRequest, ct);
@@ -203,40 +218,64 @@ public sealed class LiveSplitAuthClient
         }
     }
 
-    private async Task<bool> TryRefreshAsync(string refreshUrl, CancellationToken ct)
+    private async Task<RefreshResult> TryRefreshAsync(string refreshUrl, CancellationToken ct)
     {
         string refreshToken = _getRefreshToken();
+
         if (string.IsNullOrEmpty(refreshToken))
         {
-            return false;
+            LastRefreshResult = RefreshResult.InvalidToken;
+            return RefreshResult.InvalidToken;
         }
 
-        var payload = new { refreshToken = refreshToken };
-        string json = new JavaScriptSerializer().Serialize(payload);
-
-        using HttpResponseMessage resp = await _http.PostAsync(
-            refreshUrl,
-            new StringContent(json, Encoding.UTF8, "application/json"),
-            ct);
-
-        if (resp.StatusCode != HttpStatusCode.OK)
+        try
         {
-            return false;
+            var payload = new { refreshToken = refreshToken };
+            string json = new JavaScriptSerializer().Serialize(payload);
+
+            using HttpResponseMessage resp = await _http.PostAsync(
+                refreshUrl,
+                new StringContent(json, Encoding.UTF8, "application/json"),
+                ct);
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized ||
+                resp.StatusCode == HttpStatusCode.Forbidden)
+            {
+                LastRefreshResult = RefreshResult.InvalidToken;
+                return RefreshResult.InvalidToken;
+            }
+
+            if (resp.StatusCode != HttpStatusCode.OK)
+            {
+                LastRefreshResult = RefreshResult.ServiceUnavailable;
+                return RefreshResult.ServiceUnavailable;
+            }
+
+            string body = await resp.Content.ReadAsStringAsync();
+            RefreshResponse dto = new JavaScriptSerializer().Deserialize<RefreshResponse>(body);
+
+            if (dto == null ||
+                string.IsNullOrEmpty(dto.AccessToken) ||
+                string.IsNullOrEmpty(dto.RefreshToken))
+            {
+                LastRefreshResult = RefreshResult.ServiceUnavailable;
+                return RefreshResult.ServiceUnavailable;
+            }
+
+            _accessToken = dto.AccessToken;
+            _setRefreshToken(dto.RefreshToken);
+
+            LastRefreshResult = RefreshResult.Success;
+            return RefreshResult.Success;
         }
-
-        string body = await resp.Content.ReadAsStringAsync();
-        RefreshResponse dto = new JavaScriptSerializer().Deserialize<RefreshResponse>(body);
-
-        if (dto == null ||
-            string.IsNullOrEmpty(dto.AccessToken) ||
-            string.IsNullOrEmpty(dto.RefreshToken))
+        catch (Exception ex) when (
+            ex is HttpRequestException or
+            TaskCanceledException or
+            WebException)
         {
-            return false;
+            LastRefreshResult = RefreshResult.ServiceUnavailable;
+            return RefreshResult.ServiceUnavailable;
         }
-
-        _accessToken = dto.AccessToken;
-        _setRefreshToken(dto.RefreshToken);
-        return true;
     }
 
     public static string Protect(string plaintext)

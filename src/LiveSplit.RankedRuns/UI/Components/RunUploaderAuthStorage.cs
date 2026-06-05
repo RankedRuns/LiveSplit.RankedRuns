@@ -15,6 +15,20 @@ public static class RunUploaderAuthStorage
     private static string FilePath
         => Path.Combine(FolderPath, "auth.dat");
 
+    private static void LogStorageError(string prefix, Exception ex)
+    {
+        try
+        {
+            Directory.CreateDirectory(FolderPath);
+            File.AppendAllText(
+                Path.Combine(FolderPath, "plugin.log"),
+                DateTime.UtcNow.ToString("O") + " [" + prefix + "] " + ex + Environment.NewLine);
+        }
+        catch
+        {
+        }
+    }
+
     public static string ReadRefreshTokenProtected()
     {
         try
@@ -29,8 +43,9 @@ public static class RunUploaderAuthStorage
 
             return doc.DocumentElement?["RefreshTokenProtected"]?.InnerText ?? "";
         }
-        catch
+        catch (Exception ex)
         {
+            LogStorageError("AUTH_STORAGE_READ", ex);
             return "";
         }
     }
@@ -51,8 +66,9 @@ public static class RunUploaderAuthStorage
 
             doc.Save(FilePath);
         }
-        catch
+        catch (Exception ex)
         {
+            LogStorageError("AUTH_STORAGE_WRITE", ex);
         }
     }
 
@@ -65,8 +81,9 @@ public static class RunUploaderAuthStorage
                 File.Delete(FilePath);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            LogStorageError("AUTH_STORAGE_CLEAR", ex);
         }
     }
 }
