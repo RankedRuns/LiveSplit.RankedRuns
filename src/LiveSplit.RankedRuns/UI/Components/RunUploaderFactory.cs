@@ -24,5 +24,5 @@ public class RunUploaderFactory : IComponentFactory
 
     public string UpdateURL => null;
     public string XMLURL => null;
-    public Version Version => new(0, 1, 0);
+    public Version Version => new(0, 1, 1);
 }
