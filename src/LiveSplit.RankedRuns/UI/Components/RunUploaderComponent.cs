@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -21,25 +22,17 @@ public class RunUploaderComponent : LogicComponent
 
     private readonly HttpClient _httpClient;
 
-    private const string ProdApiBaseUrl = "https://api.rankedruns.com";
-    private const string ProdSiteBaseUrl = "https://rankedruns.com";
-
-    private static string TrimTrailingSlash(string value)
-    {
-        return value.Trim().TrimEnd('/');
-    }
+    private const bool UseLocalhost = false;
 
     private string ApiBaseUrl
-        => TrimTrailingSlash(
-            Environment.GetEnvironmentVariable("RANKEDRUNS_API_BASE_URL")
-            ?? ProdApiBaseUrl
-        );
+        => UseLocalhost
+            ? "http://localhost:3001"
+            : "https://api.rankedruns.com";
 
     private string SiteBaseUrl
-        => TrimTrailingSlash(
-            Environment.GetEnvironmentVariable("RANKEDRUNS_SITE_BASE_URL")
-            ?? ProdSiteBaseUrl
-        );
+        => UseLocalhost
+            ? "http://localhost:5173"
+            : "https://rankedruns.com";
 
     private string SubmitRunUrl => ApiBaseUrl + "/integrations/livesplit/runs";
     private string PresenceUrl => ApiBaseUrl + "/integrations/livesplit/presence";
@@ -75,6 +68,21 @@ public class RunUploaderComponent : LogicComponent
     {
         public int UserId { get; set; }
         public string Username { get; set; }
+    }
+
+    private Dictionary<string, string> BuildVariableSnapshot()
+    {
+        Dictionary<string, string> variables = [];
+
+        foreach (KeyValuePair<string, string> pair in State.Run.Metadata.VariableValueNames)
+        {
+            if (!string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+            {
+                variables[pair.Key] = pair.Value;
+            }
+        }
+
+        return variables;
     }
 
     public RunUploaderComponent(LiveSplitState state)
@@ -505,6 +513,7 @@ public class RunUploaderComponent : LogicComponent
             platformName = State.Run.Metadata.PlatformName,
             regionText = State.Run.Metadata.RegionName,
             isEmulator = State.Run.Metadata.UsesEmulator,
+            rawVariables = BuildVariableSnapshot(),
 
             comparisonName = State.CurrentComparison,
             splits = BuildSplitsSnapshot(),
